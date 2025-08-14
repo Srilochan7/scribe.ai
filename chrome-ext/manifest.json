@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "Scribe-ai",
+  "version": "1.0",
+  "description": "AI-powered Google Meet summarizer - Records and uploads audio for transcription and summarization",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://meet.google.com/*",
+    "https://*/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon.png",
+      "32": "icon.png",
+      "48": "icon.png",
+      "128": "icon.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://meet.google.com/*"],
+      "js": ["content.js"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["recording-injected.js"],
+      "matches": ["https://meet.google.com/*"]
+    }
+  ]
+}
