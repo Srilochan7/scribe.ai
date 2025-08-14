@@ -5,20 +5,14 @@
   "description": "AI-powered Google Meet summarizer - Records and uploads audio for transcription and summarization",
   "permissions": [
     "activeTab",
-    "scripting"
+    "scripting",
+    "tabCapture"
   ],
   "host_permissions": [
-    "https://meet.google.com/*",
-    "https://*/*"
+    "https://meet.google.com/*"
   ],
   "action": {
-    "default_popup": "popup.html",
-    "default_icon": {
-      "16": "icon.png",
-      "32": "icon.png",
-      "48": "icon.png",
-      "128": "icon.png"
-    }
+    "default_popup": "popup.html"
   },
   "background": {
     "service_worker": "background.js"
