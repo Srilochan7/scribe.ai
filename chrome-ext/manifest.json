@@ -1,13 +1,27 @@
 {
   "manifest_version": 3,
-  "name": "Scribe-ai",
+  "name": "scribe-ai",
   "version": "1.0",
   "description": "AI-powered Google Meet summarizer - Records and uploads audio for transcription and summarization",
+  "icons": {
+    "16": "logo.png",
+    "48": "logo.png",
+    "128": "logo.png"
+  },
+  "action": {
+    "default_icon": {
+      "16": "logo.png",
+      "48": "logo.png",
+      "128": "logo.png"
+    }
+  },
   "permissions": [
     "activeTab",
     "scripting",
-    "tabCapture"
+    "tabCapture",
+    "offscreen"
   ],
+  "minimum_chrome_version": "109",
   "host_permissions": [
     "https://meet.google.com/*"
   ],

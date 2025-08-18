@@ -1,91 +1,53 @@
-let mediaRecorder = null;
-let audioChunks = [];
-
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+// background.js (service worker)
+chrome.runtime.onMessage.addListener(async (request, sender) => {
   if (request.command === 'start') {
-    startRecording();
+    try {
+      // ensure there is an active Meet tab
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab || !tab.url || !tab.url.includes('meet.google.com')) {
+        throw new Error('Please open Google Meet first');
+      }
+
+      // create offscreen doc if not present
+      const offscreenUrl = chrome.runtime.getURL('offscreen.html');
+      const exists = await chrome.offscreen.hasDocument?.();
+      if (!exists) {
+        await chrome.offscreen.createDocument({
+          url: offscreenUrl,
+          reasons: ['USER_MEDIA'],
+          justification: 'Record Google Meet audio for transcription'
+        });
+      }
+
+      // get media stream id for target tab
+      const streamId = await new Promise((resolve) =>
+        chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id }, resolve)
+      );
+
+      if (!streamId) throw new Error('Could not get stream id');
+
+      // tell offscreen to start capturing (send streamId + server url)
+      await chrome.runtime.sendMessage({ command: 'offscreen_start', streamId, serverUrl: request.serverUrl || 'http://localhost:8000/transcribe' });
+
+      // notify popup UI
+      chrome.runtime.sendMessage({ command: 'recording_started' });
+
+    } catch (err) {
+      console.error('background start error', err);
+      chrome.runtime.sendMessage({ command: 'error', message: err.message });
+    }
   } else if (request.command === 'stop') {
-    stopRecording();
+    try {
+      // tell offscreen to stop and then close offscreen doc
+      await chrome.runtime.sendMessage({ command: 'offscreen_stop' });
+      // give it a moment to finish, then close
+      setTimeout(async () => {
+        try { await chrome.offscreen.closeDocument(); } catch(e){ /* ignore */ }
+      }, 500);
+      chrome.runtime.sendMessage({ command: 'recording_stopped' });
+    } catch (err) {
+      console.error('background stop error', err);
+      chrome.runtime.sendMessage({ command: 'error', message: err.message });
+    }
   }
 });
-
-async function startRecording() {
-  try {
-    // Get active tab first
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    
-    if (!tab.url.includes('meet.google.com')) {
-      throw new Error('Please open Google Meet first');
-    }
-
-    // Request tab capture with explicit tab ID
-    const stream = await chrome.tabCapture.capture({
-      audio: true,
-      video: false
-    });
-
-    if (!stream) {
-      throw new Error('Could not capture audio. Try refreshing the page.');
-    }
-
-    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-    audioChunks = [];
-
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        audioChunks.push(event.data);
-      }
-    };
-
-    mediaRecorder.onstop = async () => {
-      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-      await sendToServer(audioBlob);
-      stream.getTracks().forEach(track => track.stop());
-    };
-
-    mediaRecorder.start(1000); // Collect data every second
-    chrome.runtime.sendMessage({ command: 'recording_started' });
-
-  } catch (error) {
-    console.error('Recording error:', error);
-    chrome.runtime.sendMessage({ command: 'error', message: error.message });
-  }
-}
-
-function stopRecording() {
-  if (mediaRecorder && mediaRecorder.state === 'recording') {
-    mediaRecorder.stop();
-    chrome.runtime.sendMessage({ command: 'recording_stopped' });
-  }
-}
-
-async function sendToServer(audioBlob) {
-  try {
-    chrome.runtime.sendMessage({ command: 'uploading' });
-    
-    const formData = new FormData();
-    formData.append('audio', audioBlob, 'meeting.webm');
-
-    const response = await fetch('http://localhost:8000/transcribe', {
-      method: 'POST',
-      body: formData
-    });
-
-    if (!response.ok) {
-      throw new Error(`Server error: ${response.status}`);
-    }
-
-    const result = await response.json();
-    chrome.runtime.sendMessage({ 
-      command: 'upload_success', 
-      data: result 
-    });
-
-  } catch (error) {
-    console.error('Upload error:', error);
-    chrome.runtime.sendMessage({ 
-      command: 'upload_error', 
-      message: error.message 
-    });
-  }
-}
